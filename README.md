@@ -12,13 +12,13 @@ Usage
 rs -i SetPermissions.rss -s http://localhost:8080/ReportServer -v ParentPath="/" -v UserGroup="domain\user" -v UserRole="Content Manager" 
 ```
 
-*ParentPath	Set this to the parent folder in SSRS that you wish to apply the permissions to. 
+* ParentPath	Set this to the parent folder in SSRS that you wish to apply the permissions to. 
 			For example, setting this to "/" will set the user or group to have the specificed role permissions in all sub folders.
 
-*UserGroup		Set this to the domain user account or group you wish to give permissions to. 
+* UserGroup	Set this to the domain user account or group you wish to give permissions to. 
 			For example, it would be domain\user or computername\user.
 
-*UserRole		Set this to the SSRS role you wish to use. You can also set this to "*" to use all catalog roles.
+* UserRole		Set this to the SSRS role you wish to use. You can also set this to "*" to use all catalog roles.
 
 Logging
 -----
