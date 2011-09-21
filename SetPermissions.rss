@@ -54,6 +54,8 @@ Public Sub Main()
 		
 		items = rs.ListChildren(sParentPath, True)
 		
+		AddNewPolicy(sParentPath, newPolicy)
+		
 		For Each item In items
 			If item.Type = ItemTypeEnum.Folder Then
 				Try
