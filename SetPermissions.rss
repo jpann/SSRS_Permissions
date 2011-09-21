@@ -1,0 +1,167 @@
+'
+' File: SetPermissions.rss
+' 
+' Description:
+' This is a script for Microsoft SQL Report Server rs.exe that can be used to add a user or group as a certain role to folders in SSRS.
+'
+' To run the script, you must specify the global variables ParentPath, UserGroup and UserRole as an argument to rs.exe by using the -v switch.
+'
+' Example usage:
+'
+'	rs -i SetPermissions.rss -s http://localhost:8080/ReportServer -v ParentPath="/" -v UserGroup="domain\user" -v UserRole="Content Manager" 
+'
+'	ParentPath		Set this to the parent folder in SSRS that you wish to apply the permissions to. 
+'					For example, setting this to "/" will set the user or group to have the specificed role permissions in all sub folders.
+'
+'	UserGroup		Set this to the domain user account or group you wish to give permissions to. 
+'					For example, it would be domain\user or computername\user.
+'
+'	UserRole		Set this to the SSRS role you wish to use. You can also set this to "*" to use all catalog roles.
+'
+Public Sub Main()
+	Dim sParentPath As String
+	Dim sGroupUser As String
+	Dim sRoleName As String
+	
+	Dim item As CatalogItem
+	Dim items() As CatalogItem
+	Dim newPolicy As Policy
+	Dim roles() As Role
+	
+	Try
+	
+		If (String.IsNullOrEmpty(ParentPath)) Then
+			Throw New Exception("Please specify the ParentPath variable.")
+		End If
+		sParentPath = ParentPath
+		
+		If (String.IsNullOrEmpty(GroupUser)) Then
+			Throw New Exception("Please specify the GroupUser variable.")
+		End If
+		sGroupUser = GroupUser
+		
+		If (String.IsNullOrEmpty(UserRole)) Then
+			Throw New Exception("Please specify the UserRole variable.")
+		End If
+		sRoleName = UserRole
+		
+		roles = GetRoles(sRoleName)
+		If (roles Is Nothing) Then
+			Throw New Exception(String.Format("Role '{0}' does not exist.", sRoleName))
+		End If
+		
+		newPolicy = CreatePolicy(sGroupUser, roles)
+		
+		items = rs.ListChildren(sParentPath, True)
+		
+		For Each item In items
+			If item.Type = ItemTypeEnum.Folder Then
+				Try
+					Console.Write(String.Format("Adding policy '{0}' to '{1}'... ", newPolicy.GroupUserName, item.Path))
+					AddNewPolicy(item.Path, newPolicy)
+				Catch E As Exception
+					Console.WriteLine(String.Format("Err: {0}", E.Message))
+					WriteLogEntry(String.Format("{0} - Failed to add policy.", item.Path), E)
+				End Try
+			End If
+		Next
+		
+		PrintSummary(sGroupUser,newPolicy)
+	Catch Ex As Exception
+		Console.WriteLine("Fatal Error: {0}", Ex.Message)
+		WriteLogEntry("Fatal Error.", Ex)
+	End Try
+End Sub
+
+Sub PrintSummary(GroupOrUser As String, NewPolicy As Policy)
+	Dim r As Role
+	
+	Console.WriteLine("")
+	Console.WriteLine("Group or User '{0}' was added to policy '{1}' which uses the following roles:", GroupOrUser, NewPolicy.GroupUserName)
+	For Each r In NewPolicy.Roles
+		Console.WriteLine("- {0}", r.Name)
+	Next
+	Console.WriteLine("")
+End Sub
+
+Sub AddNewPolicy(ItemPath As String, NewPolicy As Policy)
+	Dim inherit As Boolean
+	Dim existingPolicies() As Policy
+	
+	existingPolicies = rs.GetPolicies(ItemPath, inherit)
+	
+	If Not (existingPolicies Is Nothing) Then
+		Dim policy as Policy
+		
+		For Each policy In existingPolicies
+			If policy.GroupUserName.ToLower() = newPolicy.GroupUserName.ToLower() Then
+				Throw New Exception("Policy already exists, skipping")
+			End If
+		Next
+		
+		Dim policyList as New System.Collections.ArrayList(existingPolicies)
+		policyList.Add(newPolicy)
+		
+		rs.SetPolicies(itemPath, policyList.ToArray(GetType(Policy)))
+		
+		Console.WriteLine("Added successfully!")
+	End If
+End Sub
+
+Function GetRoles(RoleName As String) As Role()
+	Dim r As Role
+	Dim roles() as Role
+	Dim roleList As New System.Collections.ArrayList()
+	
+	roles = rs.ListRoles(SecurityScopeEnum.Catalog)
+	
+	For Each r In roles
+		If RoleName = "*" Then
+			roleList.Add(r)
+		Else
+			If r.Name = RoleName Then
+				roleList.Add(r)
+				Exit For
+			End If
+		End If
+	Next
+	
+	Return roleList.ToArray(GetType(Role))
+End Function
+
+Function CreatePolicy(GroupUserName As String, Roles() As Role) As Policy
+	Dim policy As Policy
+	
+	policy = New Policy()
+	policy.GroupUserName = GroupUserName
+	policy.Roles = Roles
+	
+	Return policy
+End Function
+
+'
+' Logging
+Sub WriteLogEntry(ByVal Message As String)
+    Dim logfile As String = "SSRS_SetPermissions.log"
+    
+    Using oWriter As StreamWriter = New StreamWriter(logfile, True)
+        oWriter.WriteLine(String.Format("{0} - {1}", DateTime.Now, Message))
+    End Using
+End Sub
+
+Sub WriteLogEntry(ByVal Message As String, ByVal Ex As Exception)
+    Dim logfile As String = "SSRS_SetPermissions_Error.log"
+
+    Using oWriter As StreamWriter = New StreamWriter(logfile, True)
+        oWriter.WriteLine(String.Format("{0} - {1} [Err: {2}]", DateTime.Now, Message, Ex.Message))
+    End Using
+End Sub
+
+
+Sub WriteDebugEntry(ByVal Message As String)
+    Dim logfile As String = "SSRS_SetPermissions_Debug.log"
+
+    Using oWriter As StreamWriter = New StreamWriter(logfile, True)
+        oWriter.WriteLine(String.Format("{0} - {1}", DateTime.Now, Message))
+    End Using
+End Sub
